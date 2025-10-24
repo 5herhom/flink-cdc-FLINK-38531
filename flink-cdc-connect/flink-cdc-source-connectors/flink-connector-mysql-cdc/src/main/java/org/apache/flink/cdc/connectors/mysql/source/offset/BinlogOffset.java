@@ -192,10 +192,10 @@ public class BinlogOffset implements Comparable<BinlogOffset>, Serializable {
                 // And if they are disabled,
                 // it is likely that this offset would not include GTIDs as we would be trying
                 // to read the binlog of a
-                // server that no longer has GTIDs. And if they are enabled, disabled, and re-enabled,
-                // per
-                // https://dev.mysql.com/doc/refman/5.7/en/replication-gtids-failover.html all properly
-                // configured slaves that
+                // server that no longer has GTIDs. And if they are enabled, disabled, and
+                // re-enabled, per
+                // https://dev.mysql.com/doc/refman/5.7/en/replication-gtids-failover.html
+                // all properly configured slaves that
                 // use GTIDs should always have the complete set of GTIDs copied from the master, in
                 // which case
                 // again we know that this offset not having GTIDs is before the target offset ...
