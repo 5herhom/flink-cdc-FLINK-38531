@@ -17,6 +17,7 @@
 
 package org.apache.flink.cdc.connectors.mysql.debezium.reader;
 
+import java.util.concurrent.TimeUnit;
 import org.apache.flink.cdc.connectors.mysql.debezium.DebeziumUtils;
 import org.apache.flink.cdc.connectors.mysql.debezium.dispatcher.SignalEventDispatcher;
 import org.apache.flink.cdc.connectors.mysql.debezium.task.context.StatefulTaskContext;
@@ -66,6 +67,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.testcontainers.lifecycle.Startables;
 
 import java.sql.Connection;
@@ -786,8 +788,12 @@ class BinlogSplitReaderTest extends MySqlSourceTestBase {
         assertEqualsInOrder(Arrays.asList(expected), actual);
     }
 
-
+    /**
+     * In a bad case, it will skip the rest records whitch causes infinite wait for empty data.
+     * So it should has a timeout to avoid it.
+     * */
     @Test
+    @Timeout(value = 600, unit = TimeUnit.SECONDS)
     void testRestoreFromCheckpointWithGtidSetAndSkippingEventsAndRows() throws Exception {
         // Preparations
         customerDatabase.createAndInitialize();
