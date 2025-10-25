@@ -823,16 +823,17 @@ class BinlogSplitReaderTest extends MySqlSourceTestBase {
 
         // When a checkpoint is triggered
         // after id=103 ,before id=109 ,
-        // the position of cp will be event=4 and row=1
+        // the position restored from checkpoint will be event=4 and row=1
         BinlogOffset checkpointOffset =
                 BinlogOffset.builder()
                         .setBinlogFilePosition("", 0)
                         .setGtidSet(startingOffset.getGtidSet())
-                        // Because the position of checkpoint
+                        // Because the position restored from checkpoint
                         // will skip 4 events to drop the first update:
                         // QUERY / TABLE_MAP / EXT_UPDATE_ROWS / TABLE_MAP
                         .setSkipEvents(4)
-                        // The position of checkpoint will skip 1 rows to drop the first row:
+                        // The position restored from checkpoint
+                        // will skip 1 rows to drop the first
                         .setSkipRows(1)
                         .build();
 
@@ -857,8 +858,9 @@ class BinlogSplitReaderTest extends MySqlSourceTestBase {
         // Event 4: Update id = 103 and id = 109
         //        ROW 0 : Update id=103
         //        ROW 1 : Update id=109
-        // The event 0-3 will be dropped because skipEvents = 4
-        // , and only the update on 109 will be captured because skipRows = 1
+        // The event 0-3 will be dropped because skipEvents = 4.
+        // The row 0 in event 4 will be dropped because skipRows = 1.
+        // Only the update on 109 will be captured.
         updateCustomersTableInBulk(
                 mySqlConnection, customerDatabase.qualifiedTableName("customers"));
 
