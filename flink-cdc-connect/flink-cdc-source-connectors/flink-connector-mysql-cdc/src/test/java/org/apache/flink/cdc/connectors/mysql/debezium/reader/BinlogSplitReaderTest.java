@@ -786,6 +786,106 @@ class BinlogSplitReaderTest extends MySqlSourceTestBase {
         assertEqualsInOrder(Arrays.asList(expected), actual);
     }
 
+
+    @Test
+    void testRestoreFromCheckpointWithGtidSetAndSkippingEventsAndRows() throws Exception {
+        // Preparations
+        customerDatabase.createAndInitialize();
+        MySqlSourceConfig connectionConfig = getConfig(new String[] {"customers"});
+        binaryLogClient = DebeziumUtils.createBinaryClient(connectionConfig.getDbzConfiguration());
+        mySqlConnection = DebeziumUtils.createMySqlConnection(connectionConfig);
+        DataType dataType =
+            DataTypes.ROW(
+                DataTypes.FIELD("id", DataTypes.BIGINT()),
+                DataTypes.FIELD("name", DataTypes.STRING()),
+                DataTypes.FIELD("address", DataTypes.STRING()),
+                DataTypes.FIELD("phone_number", DataTypes.STRING()));
+
+        // Capture the current binlog offset, and we will start the reader from here
+        BinlogOffset startingOffset = DebeziumUtils.currentBinlogOffset(mySqlConnection);
+
+        // In this case, the binlog is:
+        // Event 0: QUERY,BEGIN
+        // Event 1: TABLE_MAP
+        // Event 2: Update id = 101 and id = 102
+        //        ROW 0 : Update id=101
+        //        ROW 1 : Update id=102
+        // Event 3: TABLE_MAP
+        // Event 4: Update id = 103 and id = 109
+        //        ROW 0 : Update id=103
+        //        ROW 1 : Update id=109
+
+        // When a checkpoint is triggered
+        // after id=103 ,before id=109 ,
+        // the position of cp will be event=4 and row=1
+        BinlogOffset checkpointOffset =
+            BinlogOffset.builder().setBinlogFilePosition("", 0)
+                .setGtidSet(startingOffset.getGtidSet())
+                // Because the position of checkpoint
+                // will skip 4 events to drop the first update:
+                // QUERY / TABLE_MAP / EXT_UPDATE_ROWS / TABLE_MAP
+                .setSkipEvents(4)
+                // The position of checkpoint will skip 1 rows to drop the first row:
+                .setSkipRows(1)
+                .build();
+
+        // Create a new config to start reading from the offset captured above
+        MySqlSourceConfig sourceConfig =
+            getConfig(
+                StartupOptions.specificOffset(checkpointOffset),
+                new String[] {"customers"});
+
+        // Create reader and submit splits
+        MySqlBinlogSplit split = createBinlogSplit(sourceConfig);
+        BinlogSplitReader reader = createBinlogReader(sourceConfig);
+        reader.submitSplit(split);
+
+        // Create some binlog events:
+        // Event 0: QUERY,BEGIN
+        // Event 1: TABLE_MAP
+        // Event 2: insert into VALUES(id=2001),(id=2002)
+        //        ROW 0 : insert into VALUES(id=2001)
+        //        ROW 1 : insert into VALUES(id=2002)
+        // Event 3: insert into VALUES(id=2003),(id=2004)
+        //        ROW 0 : insert into VALUES(id=2003)
+        //        ROW 1 : insert into VALUES(id=2004)
+        // Event 4: insert into VALUES(id=2005),(id=2006)
+        //        ROW 0 : insert into VALUES(id=2005)
+        //        ROW 1 : insert into VALUES(id=2006)
+        // The first transaction will be dropped because skipEvents = 3, SkipRows = 1
+        // and only the insert for id=2004,id=2005 and id=2006
+        // will be captured because skipRows = 1
+//        makeCustomersBinlogEventsWithBulkInsert(
+//            mySqlConnection, customerDatabase.qualifiedTableName("customers"));
+
+        // Create some binlog events:
+        // Event 0: QUERY,BEGIN
+        // Event 1: TABLE_MAP
+        // Event 2: Update id = 101 and id = 102
+        //        ROW 0 : Update id=101
+        //        ROW 1 : Update id=102
+        // Event 3: TABLE_MAP
+        // Event 4: Update id = 103 and id = 109
+        //        ROW 0 : Update id=103
+        //        ROW 1 : Update id=109
+        // The event 0-3 will be dropped because skipEvents = 4
+        // , and only the update on 109 will be captured because skipRows = 1
+        updateCustomersTableInBulk(
+            mySqlConnection, customerDatabase.qualifiedTableName("customers"));
+
+        // Read with binlog split reader and validate
+        String[] expected =
+            new String[] {
+                "-U[109, user_4, Shanghai, 123567891234]",
+                "+U[109, user_4, Pittsburgh, 123567891234]"
+            };
+        List<String> actual = readBinlogSplits(dataType, reader, expected.length);
+
+        reader.close();
+        assertEqualsInOrder(Arrays.asList(expected), actual);
+    }
+
+
     @Test
     void testReadBinlogFromTimestamp() throws Exception {
         // Preparations
@@ -1354,6 +1454,19 @@ class BinlogSplitReaderTest extends MySqlSourceTestBase {
         connection.commit();
     }
 
+
+    private void makeCustomersBinlogEventsWithBulkInsert(JdbcConnection connection, String tableId)
+        throws Exception {
+        connection.setAutoCommit(false);
+        connection.execute(
+            "INSERT INTO " + tableId + " VALUES(2001, 'user_22','Shanghai','123567891234')"
+                + ",(2002,'user_23','Shenzhen','1234323231')",
+            "INSERT INTO " + tableId + " VALUES(2003, 'user_23','Shanghai','13343242341231')"
+                + ",(2004,'user_24','Shenzhen','542423412312')",
+            "INSERT INTO " + tableId + " VALUES(2005, 'user_25','Shanghai','234234123')"
+                + ",(2006,'user_26','Shenzhen','454323423')");
+        connection.commit();
+    }
     private void makeCustomersBinlogEvents(
             JdbcConnection connection, String tableId, boolean firstSplitOnly) throws SQLException {
         // make binlog events for the first split
