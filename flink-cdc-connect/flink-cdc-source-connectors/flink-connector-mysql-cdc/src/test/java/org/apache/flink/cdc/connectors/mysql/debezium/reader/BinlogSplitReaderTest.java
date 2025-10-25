@@ -814,12 +814,12 @@ class BinlogSplitReaderTest extends MySqlSourceTestBase {
         // Event 0: QUERY,BEGIN
         // Event 1: TABLE_MAP
         // Event 2: Update id = 101 and id = 102
-        //        ROW 0 : Update id=101
-        //        ROW 1 : Update id=102
+        //        ROW 1 : Update id=101
+        //        ROW 2 : Update id=102
         // Event 3: TABLE_MAP
         // Event 4: Update id = 103 and id = 109
-        //        ROW 0 : Update id=103
-        //        ROW 1 : Update id=109
+        //        ROW 1 : Update id=103
+        //        ROW 2 : Update id=109
 
         // When a checkpoint is triggered
         // after id=103 ,before id=109 ,
@@ -852,14 +852,14 @@ class BinlogSplitReaderTest extends MySqlSourceTestBase {
         // Event 0: QUERY,BEGIN
         // Event 1: TABLE_MAP
         // Event 2: Update id = 101 and id = 102
-        //        ROW 0 : Update id=101
-        //        ROW 1 : Update id=102
+        //        ROW 1 : Update id=101
+        //        ROW 2 : Update id=102
         // Event 3: TABLE_MAP
         // Event 4: Update id = 103 and id = 109
-        //        ROW 0 : Update id=103
-        //        ROW 1 : Update id=109
+        //        ROW 1 : Update id=103
+        //        ROW 2 : Update id=109
         // The event 0-3 will be dropped because skipEvents = 4.
-        // The row 0 in event 4 will be dropped because skipRows = 1.
+        // The row 1 in event 4 will be dropped because skipRows = 1.
         // Only the update on 109 will be captured.
         updateCustomersTableInBulk(
                 mySqlConnection, customerDatabase.qualifiedTableName("customers"));
